@@ -50,6 +50,10 @@ impl Report {
         self.artifacts.is_empty()
     }
 
+    pub fn artifacts(&self) -> &[Artifact] {
+        &self.artifacts
+    }
+
     pub fn total_size(&self) -> Size {
         self.artifacts.iter().map(Artifact::size).sum()
     }

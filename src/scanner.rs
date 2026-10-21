@@ -4,6 +4,7 @@ use rayon::prelude::*;
 
 use crate::artifact::Artifact;
 use crate::directory::Directory;
+use crate::path_list::PathList;
 use crate::rules::{RULES, Rule};
 use crate::size::Size;
 
@@ -11,10 +12,11 @@ use crate::size::Size;
 const IGNORED_DIRS: &[&str] = &[".git", ".hg", ".svn"];
 
 /// Walks `root` and returns every artifact directory with its size, biggest first.
-pub fn scan(root: &Path) -> Vec<Artifact> {
+/// Excluded directories are neither walked into nor reported.
+pub fn scan(root: &Path, exclusions: &PathList) -> Vec<Artifact> {
     // Measuring a size reads every file of the artifact: this is the slow part,
     // so the artifacts are measured in parallel, spread over all CPU cores.
-    let mut artifacts: Vec<Artifact> = find_artifacts(root)
+    let mut artifacts: Vec<Artifact> = find_artifacts(root, exclusions)
         .into_par_iter()
         .map(|(path, project)| {
             let size = Size::of_directory(&path);
@@ -27,7 +29,7 @@ pub fn scan(root: &Path) -> Vec<Artifact> {
 }
 
 /// Returns the path of every artifact directory, with the project type that generated it.
-fn find_artifacts(root: &Path) -> Vec<(PathBuf, &'static str)> {
+fn find_artifacts(root: &Path, exclusions: &PathList) -> Vec<(PathBuf, &'static str)> {
     let mut found = Vec::new();
     let mut to_visit = vec![root.to_path_buf()];
 
@@ -46,10 +48,14 @@ fn find_artifacts(root: &Path) -> Vec<(PathBuf, &'static str)> {
             .collect();
 
         for subdir in directory.into_subdirs() {
+            if is_ignored(&subdir) || exclusions.covers(&subdir) {
+                continue;
+            }
+
             if let Some(rule) = matching_rules.iter().find(|rule| rule.is_artifact(&subdir)) {
                 // An artifact is never walked into: everything inside it goes away with it.
                 found.push((subdir, rule.name()));
-            } else if !is_ignored(&subdir) {
+            } else {
                 to_visit.push(subdir);
             }
         }
@@ -80,7 +86,7 @@ mod tests {
     }
 
     fn found_paths(root: &Path) -> Vec<PathBuf> {
-        scan(root)
+        scan(root, &PathList::default())
             .into_iter()
             .map(|artifact| artifact.path().strip_prefix(root).unwrap().to_path_buf())
             .collect()
@@ -153,6 +159,29 @@ mod tests {
     }
 
     #[test]
+    fn skips_excluded_directories() {
+        let root = TempDir::new().unwrap();
+        create_file(root.path(), "keep/Cargo.toml");
+        create_dir(root.path(), "keep/target");
+        create_file(root.path(), "clean/Cargo.toml");
+        create_dir(root.path(), "clean/target");
+
+        let exclusions = PathList::new([root.path().join("keep")]);
+        let found: Vec<PathBuf> = scan(root.path(), &exclusions)
+            .iter()
+            .map(|artifact| {
+                artifact
+                    .path()
+                    .strip_prefix(root.path())
+                    .unwrap()
+                    .to_path_buf()
+            })
+            .collect();
+
+        assert_eq!(found, vec![PathBuf::from("clean/target")]);
+    }
+
+    #[test]
     fn measures_artifacts_and_lists_biggest_first() {
         let root = TempDir::new().unwrap();
         create_file(root.path(), "small/Cargo.toml");
@@ -162,7 +191,10 @@ mod tests {
         fs::write(root.path().join("small/target/a"), [0; 10]).unwrap();
         fs::write(root.path().join("big/target/debug/b"), [0; 500]).unwrap();
 
-        let sizes: Vec<Size> = scan(root.path()).iter().map(Artifact::size).collect();
+        let sizes: Vec<Size> = scan(root.path(), &PathList::default())
+            .iter()
+            .map(Artifact::size)
+            .collect();
 
         assert_eq!(sizes, vec![Size::from_bytes(500), Size::from_bytes(10)]);
     }
