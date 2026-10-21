@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use crate::artifact::Artifact;
 use crate::directory::Directory;
 use crate::path_list::PathList;
-use crate::rules::{RULES, Rule};
+use crate::rules::Rule;
 use crate::size::Size;
 
 /// Version control folders never contain build artifacts, so they are skipped.
@@ -13,10 +13,10 @@ const IGNORED_DIRS: &[&str] = &[".git", ".hg", ".svn"];
 
 /// Walks `root` and returns every artifact directory with its size, biggest first.
 /// Excluded directories are neither walked into nor reported.
-pub fn scan(root: &Path, exclusions: &PathList) -> Vec<Artifact> {
+pub fn scan(root: &Path, rules: &[Rule], exclusions: &PathList) -> Vec<Artifact> {
     // Measuring a size reads every file of the artifact: this is the slow part,
     // so the artifacts are measured in parallel, spread over all CPU cores.
-    let mut artifacts: Vec<Artifact> = find_artifacts(root, exclusions)
+    let mut artifacts: Vec<Artifact> = find_artifacts(root, rules, exclusions)
         .into_par_iter()
         .map(|(path, project)| {
             let size = Size::of_directory(&path);
@@ -29,7 +29,7 @@ pub fn scan(root: &Path, exclusions: &PathList) -> Vec<Artifact> {
 }
 
 /// Returns the path of every artifact directory, with the project type that generated it.
-fn find_artifacts(root: &Path, exclusions: &PathList) -> Vec<(PathBuf, &'static str)> {
+fn find_artifacts(root: &Path, rules: &[Rule], exclusions: &PathList) -> Vec<(PathBuf, String)> {
     let mut found = Vec::new();
     let mut to_visit = vec![root.to_path_buf()];
 
@@ -42,7 +42,7 @@ fn find_artifacts(root: &Path, exclusions: &PathList) -> Vec<(PathBuf, &'static 
             }
         };
 
-        let matching_rules: Vec<&Rule> = RULES
+        let matching_rules: Vec<&Rule> = rules
             .iter()
             .filter(|rule| rule.matches(&directory))
             .collect();
@@ -54,7 +54,7 @@ fn find_artifacts(root: &Path, exclusions: &PathList) -> Vec<(PathBuf, &'static 
 
             if let Some(rule) = matching_rules.iter().find(|rule| rule.is_artifact(&subdir)) {
                 // An artifact is never walked into: everything inside it goes away with it.
-                found.push((subdir, rule.name()));
+                found.push((subdir, rule.name().to_string()));
             } else {
                 to_visit.push(subdir);
             }
@@ -72,6 +72,7 @@ fn is_ignored(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::rules;
     use std::fs;
     use tempfile::TempDir;
 
@@ -86,7 +87,7 @@ mod tests {
     }
 
     fn found_paths(root: &Path) -> Vec<PathBuf> {
-        scan(root, &PathList::default())
+        scan(root, &rules::built_in(), &PathList::default())
             .into_iter()
             .map(|artifact| artifact.path().strip_prefix(root).unwrap().to_path_buf())
             .collect()
@@ -159,6 +160,19 @@ mod tests {
     }
 
     #[test]
+    fn uses_the_rules_it_is_given() {
+        let root = TempDir::new().unwrap();
+        create_file(root.path(), "infra/main.tf");
+        create_dir(root.path(), "infra/.terraform");
+        let rules = vec![Rule::new("Terraform", &["*.tf"], &[".terraform"])];
+
+        let artifacts = scan(root.path(), &rules, &PathList::default());
+
+        assert_eq!(artifacts.len(), 1);
+        assert_eq!(artifacts[0].project(), "Terraform");
+    }
+
+    #[test]
     fn skips_excluded_directories() {
         let root = TempDir::new().unwrap();
         create_file(root.path(), "keep/Cargo.toml");
@@ -167,7 +181,7 @@ mod tests {
         create_dir(root.path(), "clean/target");
 
         let exclusions = PathList::new([root.path().join("keep")]);
-        let found: Vec<PathBuf> = scan(root.path(), &exclusions)
+        let found: Vec<PathBuf> = scan(root.path(), &rules::built_in(), &exclusions)
             .iter()
             .map(|artifact| {
                 artifact
@@ -191,7 +205,7 @@ mod tests {
         fs::write(root.path().join("small/target/a"), [0; 10]).unwrap();
         fs::write(root.path().join("big/target/debug/b"), [0; 500]).unwrap();
 
-        let sizes: Vec<Size> = scan(root.path(), &PathList::default())
+        let sizes: Vec<Size> = scan(root.path(), &rules::built_in(), &PathList::default())
             .iter()
             .map(Artifact::size)
             .collect();

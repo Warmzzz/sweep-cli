@@ -97,7 +97,7 @@ mod tests {
     fn artifact_in(dir: &TempDir, name: &str, bytes: u64) -> Artifact {
         let path = dir.path().join(name);
         fs::create_dir_all(&path).unwrap();
-        Artifact::new(path, "Rust", Size::from_bytes(bytes))
+        Artifact::new(path, "Rust".to_string(), Size::from_bytes(bytes))
     }
 
     #[test]

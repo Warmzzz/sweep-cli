@@ -1,0 +1,21 @@
+# Sweep configuration: your own cleanup rules.
+#
+# Copy this file to ~/.config/sweep/config.toml (on Windows:
+# C:\Users\<you>\.config\sweep\config.toml), or pass it with --config <PATH>.
+# Your rules are used in addition to the built-in ones.
+#
+# Each [[rule]] needs:
+#   name      - shown next to each directory found
+#   markers   - files that identify the project: "main.tf" is an exact
+#               file name, "*.tf" means any file with this extension
+#   artifacts - generated folders found next to a marker, deleted by sweep
+
+[[rule]]
+name = "Terraform"
+markers = ["*.tf"]
+artifacts = [".terraform"]
+
+[[rule]]
+name = "Node.js build output"
+markers = ["package.json"]
+artifacts = ["dist", "coverage"]

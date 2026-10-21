@@ -6,15 +6,15 @@ use crate::size::Size;
 
 /// Statistics for every artifact of one project type.
 struct ProjectStats {
-    project: &'static str,
+    project: String,
     count: usize,
     size: Size,
 }
 
 impl ProjectStats {
-    fn new(project: &'static str) -> Self {
+    fn new(project: &str) -> Self {
         Self {
-            project,
+            project: project.to_string(),
             count: 0,
             size: Size::default(),
         }
@@ -106,8 +106,12 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    fn artifact(project: &'static str, bytes: u64) -> Artifact {
-        Artifact::new(PathBuf::from("some/path"), project, Size::from_bytes(bytes))
+    fn artifact(project: &str, bytes: u64) -> Artifact {
+        Artifact::new(
+            PathBuf::from("some/path"),
+            project.to_string(),
+            Size::from_bytes(bytes),
+        )
     }
 
     #[test]
@@ -129,11 +133,11 @@ mod tests {
 
         assert_eq!(stats.len(), 2);
         assert_eq!(
-            (stats[0].project, stats[0].count, stats[0].size),
+            (stats[0].project.as_str(), stats[0].count, stats[0].size),
             ("Node.js", 1, Size::from_bytes(300))
         );
         assert_eq!(
-            (stats[1].project, stats[1].count, stats[1].size),
+            (stats[1].project.as_str(), stats[1].count, stats[1].size),
             ("Rust", 2, Size::from_bytes(150))
         );
     }

@@ -1,5 +1,6 @@
 mod artifact;
 mod cleaner;
+mod config;
 mod directory;
 mod path_list;
 mod report;
@@ -12,6 +13,7 @@ use anyhow::Result;
 use clap::Parser;
 use path_list::PathList;
 use report::Report;
+use rules::Rule;
 use safety::SafetyGuard;
 use size::Size;
 use std::io::{self, Write};
@@ -39,6 +41,10 @@ struct Args {
     /// Delete without asking for confirmation
     #[arg(short, long)]
     yes: bool,
+
+    /// Config file with your own rules [default: ~/.config/sweep/config.toml]
+    #[arg(long, value_name = "PATH")]
+    config: Option<PathBuf>,
 }
 
 fn main() -> Result<()> {
@@ -56,10 +62,12 @@ fn main() -> Result<()> {
         anyhow::bail!("The excluded path does not exist: {}", missing.display());
     }
 
+    let all_rules = load_rules(args.config)?;
+
     println!("Sweep - scanning {}", args.path.display());
 
     let exclusions = PathList::new(args.exclude);
-    let report = Report::new(scanner::scan(&args.path, &exclusions));
+    let report = Report::new(scanner::scan(&args.path, &all_rules, &exclusions));
 
     if report.is_empty() {
         println!("No cleanup targets found.");
@@ -84,6 +92,24 @@ fn main() -> Result<()> {
     println!("\n{summary}");
 
     Ok(())
+}
+
+/// The user's rules come first: when two rules claim the same folder,
+/// the project name shown is the user's.
+fn load_rules(config_path: Option<PathBuf>) -> Result<Vec<Rule>> {
+    let mut all_rules = Vec::new();
+
+    if let Some(path) = config::find(config_path) {
+        all_rules = config::load_rules(&path)?;
+        println!(
+            "Loaded {} custom rule(s) from {}",
+            all_rules.len(),
+            path.display()
+        );
+    }
+
+    all_rules.extend(rules::built_in());
+    Ok(all_rules)
 }
 
 /// Asks the user to type `yes`. Any other answer, or no answer at all, cancels.

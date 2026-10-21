@@ -7,12 +7,12 @@ use crate::size::Size;
 #[derive(Debug)]
 pub struct Artifact {
     path: PathBuf,
-    project: &'static str,
+    project: String,
     size: Size,
 }
 
 impl Artifact {
-    pub fn new(path: PathBuf, project: &'static str, size: Size) -> Self {
+    pub fn new(path: PathBuf, project: String, size: Size) -> Self {
         Self {
             path,
             project,
@@ -24,8 +24,8 @@ impl Artifact {
         &self.path
     }
 
-    pub fn project(&self) -> &'static str {
-        self.project
+    pub fn project(&self) -> &str {
+        &self.project
     }
 
     pub fn size(&self) -> Size {
@@ -51,7 +51,11 @@ mod tests {
 
     #[test]
     fn displays_size_project_and_path() {
-        let artifact = Artifact::new(PathBuf::from("app/target"), "Rust", Size::from_bytes(2048));
+        let artifact = Artifact::new(
+            PathBuf::from("app/target"),
+            "Rust".to_string(),
+            Size::from_bytes(2048),
+        );
 
         assert_eq!(
             artifact.to_string(),
