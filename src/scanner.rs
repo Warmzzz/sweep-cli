@@ -1,28 +1,34 @@
-use std::fmt;
 use std::path::{Path, PathBuf};
 
+use rayon::prelude::*;
+
+use crate::artifact::Artifact;
 use crate::directory::Directory;
 use crate::rules::{RULES, Rule};
+use crate::size::Size;
 
 /// Version control folders never contain build artifacts, so they are skipped.
 const IGNORED_DIRS: &[&str] = &[".git", ".hg", ".svn"];
 
-/// A generated directory that can be removed.
-#[derive(Debug)]
-pub struct Artifact {
-    path: PathBuf,
-    project: &'static str,
-}
-
-impl fmt::Display for Artifact {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(formatter, "[{}] {}", self.project, self.path.display())
-    }
-}
-
-/// Walks `root` and returns every artifact directory, sorted by path.
+/// Walks `root` and returns every artifact directory with its size, biggest first.
 pub fn scan(root: &Path) -> Vec<Artifact> {
-    let mut artifacts = Vec::new();
+    // Measuring a size reads every file of the artifact: this is the slow part,
+    // so the artifacts are measured in parallel, spread over all CPU cores.
+    let mut artifacts: Vec<Artifact> = find_artifacts(root)
+        .into_par_iter()
+        .map(|(path, project)| {
+            let size = Size::of_directory(&path);
+            Artifact::new(path, project, size)
+        })
+        .collect();
+
+    artifacts.sort_by(|a, b| b.size().cmp(&a.size()).then(a.path().cmp(b.path())));
+    artifacts
+}
+
+/// Returns the path of every artifact directory, with the project type that generated it.
+fn find_artifacts(root: &Path) -> Vec<(PathBuf, &'static str)> {
+    let mut found = Vec::new();
     let mut to_visit = vec![root.to_path_buf()];
 
     while let Some(path) = to_visit.pop() {
@@ -42,18 +48,14 @@ pub fn scan(root: &Path) -> Vec<Artifact> {
         for subdir in directory.into_subdirs() {
             if let Some(rule) = matching_rules.iter().find(|rule| rule.is_artifact(&subdir)) {
                 // An artifact is never walked into: everything inside it goes away with it.
-                artifacts.push(Artifact {
-                    path: subdir,
-                    project: rule.name(),
-                });
+                found.push((subdir, rule.name()));
             } else if !is_ignored(&subdir) {
                 to_visit.push(subdir);
             }
         }
     }
 
-    artifacts.sort_by(|a, b| a.path.cmp(&b.path));
-    artifacts
+    found
 }
 
 fn is_ignored(path: &Path) -> bool {
@@ -80,7 +82,7 @@ mod tests {
     fn found_paths(root: &Path) -> Vec<PathBuf> {
         scan(root)
             .into_iter()
-            .map(|artifact| artifact.path.strip_prefix(root).unwrap().to_path_buf())
+            .map(|artifact| artifact.path().strip_prefix(root).unwrap().to_path_buf())
             .collect()
     }
 
@@ -151,15 +153,17 @@ mod tests {
     }
 
     #[test]
-    fn displays_project_name_and_path() {
-        let artifact = Artifact {
-            path: PathBuf::from("app/target"),
-            project: "Rust",
-        };
+    fn measures_artifacts_and_lists_biggest_first() {
+        let root = TempDir::new().unwrap();
+        create_file(root.path(), "small/Cargo.toml");
+        create_file(root.path(), "big/Cargo.toml");
+        fs::create_dir_all(root.path().join("small/target")).unwrap();
+        fs::create_dir_all(root.path().join("big/target/debug")).unwrap();
+        fs::write(root.path().join("small/target/a"), [0; 10]).unwrap();
+        fs::write(root.path().join("big/target/debug/b"), [0; 500]).unwrap();
 
-        assert_eq!(
-            artifact.to_string(),
-            format!("[Rust] {}", Path::new("app/target").display())
-        );
+        let sizes: Vec<Size> = scan(root.path()).iter().map(Artifact::size).collect();
+
+        assert_eq!(sizes, vec![Size::from_bytes(500), Size::from_bytes(10)]);
     }
 }

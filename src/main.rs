@@ -1,9 +1,13 @@
+mod artifact;
 mod directory;
+mod report;
 mod rules;
 mod scanner;
+mod size;
 
 use anyhow::Result;
 use clap::Parser;
+use report::Report;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -34,18 +38,14 @@ fn main() -> Result<()> {
 
     println!("Sweep - scanning {}", args.path.display());
 
-    let artifacts = scanner::scan(&args.path);
+    let report = Report::new(scanner::scan(&args.path));
 
-    if artifacts.is_empty() {
+    if report.is_empty() {
         println!("No cleanup targets found.");
         return Ok(());
     }
 
-    println!("\nFound {} directory(ies):", artifacts.len());
-
-    for artifact in &artifacts {
-        println!("  {artifact}");
-    }
+    println!("\n{report}");
 
     if args.dry_run {
         println!("\nDry run: nothing was deleted.");
