@@ -10,6 +10,10 @@
 #               file name, "*.tf" means any file with this extension
 #   artifacts - generated folders found next to a marker, deleted by sweep
 
+# Once a day, sweep tells you when a new minor or major version is out.
+# Uncomment to turn this off (settings must come before the first [[rule]]).
+# update_check = false
+
 [[rule]]
 name = "Terraform"
 markers = ["*.tf"]

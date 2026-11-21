@@ -8,10 +8,12 @@ mod rules;
 mod safety;
 mod scanner;
 mod size;
+mod updater;
 
 use anyhow::Result;
 use artifact::Artifact;
-use clap::Parser;
+use clap::{Parser, Subcommand};
+use config::Config;
 use dialoguer::MultiSelect;
 use path_list::PathList;
 use report::Report;
@@ -25,9 +27,13 @@ use std::path::PathBuf;
 #[command(
     name = "sweep",
     version,
-    about = "A lightweight cross-platform project cleanup CLI"
+    about = "A lightweight cross-platform project cleanup CLI",
+    args_conflicts_with_subcommands = true
 )]
 struct Args {
+    #[command(subcommand)]
+    command: Option<Command>,
+
     /// Project directory to scan
     #[arg(default_value = ".")]
     path: PathBuf,
@@ -53,9 +59,38 @@ struct Args {
     interactive: bool,
 }
 
-fn main() -> Result<()> {
-    let args = Args::parse();
+#[derive(Subcommand, Debug)]
+enum Command {
+    /// Download and install the latest version of sweep
+    Update,
+}
 
+fn main() -> Result<()> {
+    let mut args = Args::parse();
+
+    if let Some(Command::Update) = args.command {
+        return updater::update();
+    }
+
+    let config = load_config(args.config.take())?;
+
+    // Scripts (`--yes`) do not need a notice; anyone can turn it off in the config file.
+    let update_notice = match config::default_path() {
+        Some(config_path) if config.update_check && !args.yes => Some(
+            updater::check_in_background(config_path.with_file_name("last-update-check")),
+        ),
+        _ => None,
+    };
+
+    run(args, &config.rules)?;
+
+    if let Some(receiver) = update_notice {
+        updater::print_notice(receiver);
+    }
+    Ok(())
+}
+
+fn run(args: Args, all_rules: &[Rule]) -> Result<()> {
     if !args.path.is_dir() {
         anyhow::bail!(
             "The specified path is not a directory: {}",
@@ -68,12 +103,10 @@ fn main() -> Result<()> {
         anyhow::bail!("The excluded path does not exist: {}", missing.display());
     }
 
-    let all_rules = load_rules(args.config)?;
-
     println!("Sweep - scanning {}", args.path.display());
 
     let exclusions = PathList::new(args.exclude);
-    let report = Report::new(scanner::scan(&args.path, &all_rules, &exclusions));
+    let report = Report::new(scanner::scan(&args.path, all_rules, &exclusions));
 
     if report.is_empty() {
         println!("No cleanup targets found.");
@@ -114,20 +147,20 @@ fn main() -> Result<()> {
 
 /// The user's rules come first: when two rules claim the same folder,
 /// the project name shown is the user's.
-fn load_rules(config_path: Option<PathBuf>) -> Result<Vec<Rule>> {
-    let mut all_rules = Vec::new();
+fn load_config(config_path: Option<PathBuf>) -> Result<Config> {
+    let mut config = Config::default();
 
     if let Some(path) = config::find(config_path) {
-        all_rules = config::load_rules(&path)?;
+        config = config::load(&path)?;
         println!(
             "Loaded {} custom rule(s) from {}",
-            all_rules.len(),
+            config.rules.len(),
             path.display()
         );
     }
 
-    all_rules.extend(rules::built_in());
-    Ok(all_rules)
+    config.rules.extend(rules::built_in());
+    Ok(config)
 }
 
 /// Shows a checkbox list: Space toggles a directory, Enter confirms.

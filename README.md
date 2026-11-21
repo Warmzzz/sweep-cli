@@ -35,6 +35,7 @@ Delete these directories and free 1.6 GB? Type 'yes' to confirm:
 - **Safe by default**: explicit confirmation, exclusions, and a last safety check before each deletion.
 - **Fast**: every directory is read only once, artifacts are never walked into, and sizes are measured and folders deleted in parallel.
 - **Single binary** for Windows, Linux and macOS, with no runtime to install.
+- **Self-updating**: `sweep update` installs the latest version, and sweep tells you when one is out.
 
 ## Installation
 
@@ -64,6 +65,26 @@ With [Rust](https://rustup.rs) installed:
 cargo install --git https://github.com/Warmzzz/sweep-cli
 ```
 
+### Updating
+
+```bash
+sweep update
+```
+
+sweep downloads the latest release for your platform, checks it against the release's `SHA256SUMS.txt`
+and replaces itself, after asking for confirmation.
+
+Once a day, at the end of a scan, sweep also tells you when a new **minor or major** version is out
+(bug fix releases are not announced). The check runs in the background and gives up after 2 seconds,
+so it never slows down or breaks a scan, even offline. It is skipped with `--yes`, and you can turn it off
+in your [config file](#custom-rules):
+
+```toml
+update_check = false
+```
+
+> Installed with `cargo install`? Update with the same `cargo install` command instead.
+
 ## Usage
 
 ```
@@ -80,6 +101,7 @@ sweep [OPTIONS] [PATH]
 | `-i`, `--interactive` | Choose the directories to delete from a checkbox list                     |
 | `-h`, `--help`      | Print help                                                                  |
 | `-V`, `--version`   | Print version                                                               |
+| `update`            | Download and install the latest version (see [Updating](#updating))         |
 
 ### Examples
 
@@ -212,6 +234,7 @@ The code is split into small modules, each with one job:
 | `path_list.rs`  | Compares paths reliably (exclusions, system directories)     |
 | `safety.rs`     | The last check before each deletion                          |
 | `cleaner.rs`    | Deletes the artifacts and sums up the result                 |
+| `updater.rs`    | `sweep update` and the daily new-version check               |
 
 To support a new language for everyone, add a `Rule::new(...)` line to `built_in()` in `src/rules.rs`.
 
