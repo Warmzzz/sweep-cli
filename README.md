@@ -244,7 +244,7 @@ To support a new language for everyone, add a `Rule::new(...)` line to `built_in
 2. Tag and push:
 
    ```bash
-   git tag v1.1.0
+   git tag v1.2.0
    ```
 
    ```bash
