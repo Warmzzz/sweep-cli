@@ -31,6 +31,7 @@ Delete these directories and free 1.6 GB? Type 'yes' to confirm:
   A `target` folder is cleaned only if there is a `Cargo.toml` (or `pom.xml`…) beside it, so random folders named `bin` or `build` are left alone.
 - **16 project types out of the box**, and you can [add your own](#custom-rules).
 - **Shows the space you get back**, for each folder, per project type and in total.
+- **You choose**: tick or untick each folder in an interactive checkbox list.
 - **Safe by default**: explicit confirmation, exclusions, and a last safety check before each deletion.
 - **Fast**: every directory is read only once, artifacts are never walked into, and sizes are measured and folders deleted in parallel.
 - **Single binary** for Windows, Linux and macOS, with no runtime to install.
@@ -76,6 +77,7 @@ sweep [OPTIONS] [PATH]
 | `--exclude <PATH>`  | Leave this directory and everything inside it untouched (can be repeated)   |
 | `-y`, `--yes`       | Delete without asking for confirmation                                      |
 | `--config <PATH>`   | Config file with your own rules (default: `~/.config/sweep/config.toml`)    |
+| `-i`, `--interactive` | Choose the directories to delete from a checkbox list                     |
 | `-h`, `--help`      | Print help                                                                  |
 | `-V`, `--version`   | Print version                                                               |
 
@@ -92,6 +94,23 @@ Clean everything except one project:
 ```bash
 sweep ~/projects --exclude ~/projects/client-app
 ```
+
+Pick the directories to delete one by one:
+
+```bash
+sweep ~/projects -i
+```
+
+```
+? Select the directories to delete (Space: toggle, a: all, Enter: confirm)
+  [x]     1.2 GB  [Node.js] /home/me/projects/web/node_modules
+> [ ]   364.3 MB  [Rust] /home/me/projects/api/target
+  [x]    12.0 KB  [Python] /home/me/projects/tools/__pycache__
+```
+
+Use the arrow keys to move, `Space` to tick or untick, `a` to toggle all, `Enter` to confirm and `Esc` to cancel.
+Everything is ticked at first. You are still asked to type `yes`, with the size of your selection only.
+The list needs a real terminal: in a script, use `--yes` instead.
 
 Clean without the confirmation question, for example in a script:
 
@@ -202,7 +221,7 @@ To support a new language for everyone, add a `Rule::new(...)` line to `built_in
 2. Tag and push:
 
    ```bash
-   git tag v1.0.0
+   git tag v1.1.0
    ```
 
    ```bash
