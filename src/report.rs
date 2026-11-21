@@ -50,6 +50,10 @@ impl Report {
         self.artifacts.is_empty()
     }
 
+    pub fn into_artifacts(self) -> Vec<Artifact> {
+        self.artifacts
+    }
+
     pub fn artifacts(&self) -> &[Artifact] {
         &self.artifacts
     }

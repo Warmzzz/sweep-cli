@@ -10,7 +10,9 @@ mod scanner;
 mod size;
 
 use anyhow::Result;
+use artifact::Artifact;
 use clap::Parser;
+use dialoguer::MultiSelect;
 use path_list::PathList;
 use report::Report;
 use rules::Rule;
@@ -45,6 +47,10 @@ struct Args {
     /// Config file with your own rules [default: ~/.config/sweep/config.toml]
     #[arg(long, value_name = "PATH")]
     config: Option<PathBuf>,
+
+    /// Choose the directories to delete from a checkbox list
+    #[arg(short, long)]
+    interactive: bool,
 }
 
 fn main() -> Result<()> {
@@ -81,6 +87,18 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    let report = if args.interactive {
+        match select_artifacts(report.into_artifacts())? {
+            Some(selected) if !selected.is_empty() => Report::new(selected),
+            _ => {
+                println!("Nothing selected: nothing was deleted.");
+                return Ok(());
+            }
+        }
+    } else {
+        report
+    };
+
     if !args.yes && !confirm_deletion(report.total_size())? {
         println!("Cancelled: nothing was deleted.");
         return Ok(());
@@ -110,6 +128,25 @@ fn load_rules(config_path: Option<PathBuf>) -> Result<Vec<Rule>> {
 
     all_rules.extend(rules::built_in());
     Ok(all_rules)
+}
+
+/// Shows a checkbox list: Space toggles a directory, Enter confirms.
+/// Returns `None` when the user leaves with Esc or q.
+fn select_artifacts(artifacts: Vec<Artifact>) -> Result<Option<Vec<Artifact>>> {
+    let checked = MultiSelect::new()
+        .with_prompt("Select the directories to delete (Space: toggle, a: all, Enter: confirm)")
+        .items(&artifacts)
+        .defaults(&vec![true; artifacts.len()])
+        .interact_opt()?;
+
+    Ok(checked.map(|indexes| {
+        artifacts
+            .into_iter()
+            .enumerate()
+            .filter(|(index, _)| indexes.contains(index))
+            .map(|(_, artifact)| artifact)
+            .collect()
+    }))
 }
 
 /// Asks the user to type `yes`. Any other answer, or no answer at all, cancels.
