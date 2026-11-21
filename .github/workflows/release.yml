@@ -73,7 +73,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           mkdir "$ARCHIVE"
-          cp "target/${{ matrix.target }}/release/sweep" config.example.toml "$ARCHIVE/"
+          cp "target/${{ matrix.target }}/release/sweep" config.example.toml LICENSE "$ARCHIVE/"
           tar -czf "$ARCHIVE.tar.gz" "$ARCHIVE"
 
       - name: Package (Windows)
@@ -81,7 +81,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory $env:ARCHIVE
-          Copy-Item "target/${{ matrix.target }}/release/sweep.exe", config.example.toml $env:ARCHIVE
+          Copy-Item "target/${{ matrix.target }}/release/sweep.exe", config.example.toml, LICENSE $env:ARCHIVE
           Compress-Archive $env:ARCHIVE "$env:ARCHIVE.zip"
 
       - uses: actions/upload-artifact@v7

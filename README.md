@@ -167,7 +167,7 @@ Each `[[rule]]` has:
 
 The config file is checked when sweep starts: a misspelled field, a rule without markers or artifacts,
 or an artifact that is a path (like `../src`) stops sweep with a clear error instead of being ignored.
-A ready-to-copy example is in [`config.example.toml`](config.example.toml), also included in every release archive.
+A ready-to-copy example is in [`config.example.toml`](config.example.toml), included in every release archive with the license.
 
 ## Safety
 
@@ -230,3 +230,7 @@ To support a new language for everyone, add a `Rule::new(...)` line to `built_in
 
 GitHub Actions checks that the tag matches the version, runs the tests, builds the five binaries
 and publishes them on a GitHub release.
+
+## License
+
+[MIT](LICENSE)
